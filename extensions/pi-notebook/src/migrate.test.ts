@@ -191,7 +191,7 @@ test("handoff-only notebooks can be staged without inventing memories", () => {
 
 test("CLI defaults to read-only dry-run and requires explicit write arguments", () => {
   const source = fixture();
-  const script = resolve("scripts/migrate.ts");
+  const script = resolve(import.meta.dirname, "../scripts/migrate.ts");
   const before = snapshot(source);
   const summary = execFileSync(
     process.execPath,
