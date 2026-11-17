@@ -4,11 +4,33 @@
   "description": "Collection of Pi (pi coding agent) extensions, installable individually from one package.",
   "type": "module",
   "license": "MIT",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "pi": {
+    "extensions": [
+      "extensions/*/index.ts"
+    ],
+    "image": "./extensions/pi-visual-stats/preview.png"
+  },
+  "scripts": {
+    "test": "tsx --test \"extensions/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-agent-core": "*",
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*",
     "typebox": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
   }
 }

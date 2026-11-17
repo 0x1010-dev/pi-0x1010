@@ -330,10 +330,11 @@ them outside the notebook or remove them after reviewing your backups. Migration
 ## Development and evaluation
 
 ```sh
+# from the pi-0x1010 repo root
 npm install
 npm run typecheck
 npm test
-pi --extension ./src/index.ts
+pi --extension ./extensions/pi-notebook/index.ts
 ```
 
 Tests cover storage, registered tools, human edits, confirmed deletion, recall delivery,

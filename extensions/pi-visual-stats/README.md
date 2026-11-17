@@ -22,14 +22,15 @@ Pi extension: turns the prompt box's bottom border into a live context progress 
 
 ## Installing
 
-The repo is a [pi package](https://pi.dev/packages):
+This extension ships in the [pi-0x1010](../../README.md) package:
 
 ```bash
-pi install git:github.com/0x1010-dev/pi-visual-stats
-pi install ./pi-visual-stats   # local path
-
-# (once published to npm, also: pi install npm:0x1010-dev/pi-visual-stats)
+pi install git:github.com/0x1010-dev/pi-0x1010
+pi install ./pi-0x1010         # local path
 ```
+
+Enable just this extension in settings (`pi config`), or one-off with
+`pi -e ./pi-0x1010/extensions/pi-visual-stats/index.ts`.
 
 No runtime dependencies: pi's own packages (`@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`) are declared as `*` peerDependencies and supplied by the host.
 

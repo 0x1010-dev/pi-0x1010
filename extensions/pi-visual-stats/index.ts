@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { createEditorFactory } from "./editor.js";
-import { createFooter } from "./footer.js";
+import { createEditorFactory } from "./src/editor.js";
+import { createFooter } from "./src/footer.js";
 
 /**
  * pi-visual-stats
