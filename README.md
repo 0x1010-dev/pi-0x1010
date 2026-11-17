@@ -54,7 +54,7 @@ pi -e ./pi-0x1010/extensions/pi-notebook/index.ts
 |---|---|---|
 | [`pi-notebook`](extensions/pi-notebook/) | stable | Durable, file-based memory: rules in `AGENTS.md`, per-project handoff, searchable memories. Zero background model calls. |
 | [`pi-visual-stats`](extensions/pi-visual-stats/) | stable | Prompt-box bottom border as a live context progress bar + compact footer. |
-| [`psp-tmux`](extensions/psp-tmux/) | WIP | Bridges Pi's Program Status Protocol (OSC 7501) through tmux via DCS passthrough, so terminals like Termius get status + push notifications even when Pi runs inside tmux. |
+| [`psp-tmux`](extensions/psp-tmux/) | implemented | Bridges Pi's Program Status Protocol (OSC 7501) through tmux via DCS passthrough, so terminals like Termius get status + push notifications even when Pi runs inside tmux. Termius acceptance pending on-device verification. |
 
 ## Development
 
