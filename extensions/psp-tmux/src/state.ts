@@ -1,5 +1,32 @@
 import type { ProgramStatus } from "@earendil-works/pi-tui";
-import { formatProgramStatus } from "@earendil-works/pi-tui";
+import { replaceControlCharacters } from "@earendil-works/pi-tui";
+
+const APP_PATTERN = /^[A-Za-z0-9_.+-]{1,32}$/;
+
+function b64(text: string): string {
+	return Buffer.from(text, "utf8").toString("base64");
+}
+
+/**
+ * Encode a status report as OSC 7501. Mirrors pi-tui's `formatProgramStatus`
+ * (kept local rather than post-processed so the `title` key can be added):
+ * Termius renders `title`, Rex/Ghostty render `msg`, so both carry the same
+ * text.
+ */
+export function formatReport(status: ProgramStatus): string {
+	const pairs = [`state=${status.state}`];
+	if (status.app !== undefined && APP_PATTERN.test(status.app))
+		pairs.push(`app=${status.app}`);
+	if (status.state === "blocked" && status.kind) pairs.push(`kind=${status.kind}`);
+	const message = status.message
+		? replaceControlCharacters(status.message).trim()
+		: "";
+	if (message) {
+		pairs.push(`title=${b64(message)}`);
+		pairs.push(`msg=${b64(message)}`);
+	}
+	return `\x1b]7501;${pairs.join(":")}\x1b\\`;
+}
 
 /**
  * tmux DCS passthrough envelope. tmux intercepts `ESC P tmux; … ESC \`,
@@ -254,7 +281,7 @@ export class PspTmuxState {
 		const key = JSON.stringify(status);
 		if (key === this.lastReport) return undefined;
 		this.lastReport = key;
-		return formatProgramStatus(status);
+		return formatReport(status);
 	}
 
 	/** Forget a previous run (session switch, reload). Returns a report. */

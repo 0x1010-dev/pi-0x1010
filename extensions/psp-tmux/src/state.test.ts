@@ -3,6 +3,7 @@ import * as assert from "node:assert/strict";
 
 import {
 	formatDuration,
+	formatReport,
 	PspTmuxState,
 	tmuxPassthrough,
 	truncate,
@@ -30,6 +31,26 @@ test("formatDuration", () => {
 test("truncate keeps short text, ellipsizes long text", () => {
 	assert.equal(truncate("abc", 5), "abc");
 	assert.equal(truncate("1234567890", 5), "1234\u2026");
+});
+
+test("formatReport emits title and msg with the same text", () => {
+	const oscSeq = formatReport({
+		state: "done",
+		app: "pi",
+		message: "my-notebook \u00b7 3 turns \u00b7 42s",
+	});
+	const b64 = Buffer.from("my-notebook \u00b7 3 turns \u00b7 42s", "utf8").toString("base64");
+	assert.ok(oscSeq.startsWith("\x1b]7501;state=done:app=pi:"), oscSeq);
+	assert.ok(oscSeq.includes(`title=${b64}:`), oscSeq);
+	assert.ok(oscSeq.endsWith(`msg=${b64}\x1b\\`), oscSeq);
+});
+
+test("formatReport: kind only for blocked, no title/msg without a message", () => {
+	assert.equal(formatReport({ state: "blocked", kind: "permission" }),
+		"\x1b]7501;state=blocked:kind=permission\x1b\\");
+	assert.equal(formatReport({ state: "clear" }), "\x1b]7501;state=clear\x1b\\");
+	assert.equal(formatReport({ state: "done", app: "bad app!" }),
+		"\x1b]7501;state=done\x1b\\");
 });
 
 test("tmuxPassthrough wraps in DCS envelope with doubled ESCs", () => {

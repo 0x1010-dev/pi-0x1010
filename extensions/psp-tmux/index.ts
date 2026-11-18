@@ -12,8 +12,7 @@
  * terminal directly and this extension stays silent.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { formatProgramStatus } from "@earendil-works/pi-tui";
-import { PspTmuxState, tmuxPassthrough } from "./src/state.ts";
+import { formatReport, PspTmuxState, tmuxPassthrough } from "./src/state.ts";
 
 const APP = "pi";
 
@@ -48,6 +47,6 @@ export default function pspTmux(pi: ExtensionAPI): void {
 	// Remove the status from the terminal on exit. Pi's native clear only
 	// fires for probe-confirmed terminals, which never happens behind tmux.
 	pi.on("session_shutdown", () => {
-		process.stdout.write(tmuxPassthrough(formatProgramStatus({ state: "clear" })));
+		process.stdout.write(tmuxPassthrough(formatReport({ state: "clear" })));
 	});
 }

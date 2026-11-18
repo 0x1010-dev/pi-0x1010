@@ -48,7 +48,9 @@ behind tmux.
 ## Messages
 
 One line, middle-dot separated, capped (tool line 80 chars, full message
-150; pi's encoder also enforces the spec's 2048-byte limit):
+150). The report carries the text in both the `title` and `msg` keys —
+Termius renders `title`, Rex/Ghostty render `msg`; pi-tui's own encoder
+only emits `msg`, so the extension uses a small local encoder for this.
 
 | State | Message |
 |---|---|
