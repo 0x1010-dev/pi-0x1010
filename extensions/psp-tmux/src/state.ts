@@ -147,7 +147,8 @@ export class PspTmuxState {
 				return this.report();
 			case "turn_start":
 				this.turns++;
-				return undefined;
+				// Keep the working title live: `session · turn N`.
+				return this.runActive ? this.report() : undefined;
 			case "tool_call":
 				this.lastTool = {
 					name: event.toolName,
@@ -304,11 +305,17 @@ export class PspTmuxState {
 		const status: ProgramStatus = this.runActive
 			? { state: "working" }
 			: this.restingStatus;
-		// The session name fills in only when no message is baked in
-		// (done carries `session · turns · duration`; working the name).
+		// Without a baked-in message (done carries `session · turns · duration`),
+		// the title is the session name — `pi` when unnamed — and working adds a
+		// live turn counter. No title at all would make Termius fall back to the
+		// hostname.
 		if ((status.state === "working" || status.state === "done") && !status.message) {
-			const name = this.getSessionName();
-			return name ? { ...status, message: name } : status;
+			const name = this.getSessionName() ?? this.app;
+			const message =
+				status.state === "working" && this.turns > 0
+					? `${name} \u00b7 turn ${this.turns}`
+					: name;
+			return { ...status, message };
 		}
 		return status;
 	}

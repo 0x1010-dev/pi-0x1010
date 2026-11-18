@@ -54,7 +54,7 @@ only emits `msg`, so the extension uses a small local encoder for this.
 
 | State | Message |
 |---|---|
-| working | session name |
+| working | session name (falls back to `pi`), plus a live `· turn N` counter |
 | done | `session · N turns · duration` (e.g. `my-notebook · 3 turns · 3m 12s`; session falls back to `pi`) |
 | blocked, permission | `tool: first input line` (e.g. `bash: git push --force origin main`) |
 | blocked, other | dialog title |

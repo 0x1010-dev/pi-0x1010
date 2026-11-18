@@ -216,6 +216,23 @@ test("done message without session name falls back to pi; 1 turn singular", () =
 	assert.equal(msgOf(done), "pi \u00b7 1 turn \u00b7 0s");
 });
 
+test("working title: pi when unnamed, live turn counter", () => {
+	const s = state();
+	const working = s.handle({ type: "agent_start" });
+	assert.equal(msgOf(working), "pi");
+	const t1 = s.handle({ type: "turn_start" });
+	assert.equal(msgOf(t1), "pi \u00b7 turn 1");
+	const t2 = s.handle({ type: "turn_start" });
+	assert.equal(msgOf(t2), "pi \u00b7 turn 2");
+});
+
+test("working title uses session name when set", () => {
+	const s = state("my-notebook");
+	s.handle({ type: "agent_start" });
+	const t1 = s.handle({ type: "turn_start" });
+	assert.equal(msgOf(t1), "my-notebook \u00b7 turn 1");
+});
+
 test("aborted run reports plain idle, no metadata", () => {
 	const s = state("my-notebook");
 	s.handle({ type: "agent_start" });
