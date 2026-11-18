@@ -45,6 +45,23 @@ On `session_shutdown` the extension sends `state=clear` — pi's native
 clear only fires for probe-confirmed terminals, which never happens
 behind tmux.
 
+## Messages
+
+One line, middle-dot separated, capped (tool line 80 chars, full message
+150; pi's encoder also enforces the spec's 2048-byte limit):
+
+| State | Message |
+|---|---|
+| working | session name |
+| done | `session · N turns · duration` (e.g. `my-notebook · 3 turns · 3m 12s`; session falls back to `pi`) |
+| blocked, permission | `tool: first input line` (e.g. `bash: git push --force origin main`) |
+| blocked, other | dialog title |
+| error | first error line, plus ` (last: tool)` when a tool ran last |
+| idle | none |
+
+All of it is harvested from existing events (`tool_call`, `turn_start`,
+timestamps) — no model calls.
+
 ## Requirements
 
 - tmux ≥ 3.2 with `allow-passthrough on` (global or per-window). Default is
@@ -84,7 +101,7 @@ extension.
 
 ## Status
 
-Implemented and envelope-verified against tmux 3.8 (see above). 10 unit
-tests cover the envelope encoding and the full state machine
+Implemented and envelope-verified against tmux 3.8 (see above). 20 unit
+tests cover the envelope encoding, the full state machine
 (working/done/error/idle, blocked stacking and unwinding, compaction
-outcomes, aborts, session-name messages, dedupe).
+outcomes, aborts, dedupe) and the message formats.

@@ -36,6 +36,8 @@ export default function pspTmux(pi: ExtensionAPI): void {
 	});
 	pi.on("agent_start", (event) => emit(state.handle(event)));
 	pi.on("agent_settled", (event) => emit(state.handle(event)));
+	pi.on("turn_start", (event) => emit(state.handle(event)));
+	pi.on("tool_call", (event) => emit(state.handle(event)));
 	pi.on("message_end", (event) => emit(state.handle(event)));
 	pi.on("session_before_compact", (event) => emit(state.handle(event)));
 	pi.on("session_compact", (event) => emit(state.handle(event)));

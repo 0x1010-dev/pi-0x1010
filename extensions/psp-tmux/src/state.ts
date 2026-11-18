@@ -14,10 +14,40 @@ function firstLine(text: string | undefined): string {
 	return text?.split(/\r?\n/, 1)[0]?.trim() || "Error";
 }
 
+export function truncate(text: string, max: number): string {
+	return text.length <= max ? text : text.slice(0, max - 1) + "\u2026";
+}
+
+export function formatDuration(ms: number): string {
+	const s = Math.max(0, Math.round(ms / 1000));
+	if (s < 60) return `${s}s`;
+	const m = Math.floor(s / 60);
+	if (m < 60) return `${m}m ${s % 60}s`;
+	const h = Math.floor(m / 60);
+	return `${h}h ${m % 60}m`;
+}
+
+/** One short line describing a tool call's target, for blocked messages. */
+function toolInputLine(input: unknown): string {
+	if (typeof input === "string") return truncate(firstLine(input), 80);
+	if (input && typeof input === "object") {
+		const o = input as Record<string, unknown>;
+		const v = o.command ?? o.path ?? o.pattern;
+		if (typeof v === "string") return truncate(firstLine(v), 80);
+	}
+	try {
+		return truncate(JSON.stringify(input) ?? "", 80);
+	} catch {
+		return "";
+	}
+}
+
 /** The extension events the state machine consumes (structural subset). */
 export type PspTmuxEvent =
 	| { type: "agent_start" }
 	| { type: "agent_settled"; aborted: boolean }
+	| { type: "turn_start" }
+	| { type: "tool_call"; toolName: string; input: unknown }
 	| {
 			type: "message_end";
 			message: { role: string; stopReason?: string; errorMessage?: string };
@@ -39,6 +69,14 @@ export type PspTmuxEvent =
  * interactive-mode internals. Precedence: blocked > compacting > working >
  * resting. Each report replaces the terminal's record completely, so `app`
  * repeats in every report.
+ *
+ * Messages (one line, middle-dot separated, capped):
+ * - working: session name
+ * - done: `session · N turns · duration` (baked in at settle)
+ * - blocked (permission): `tool: first input line` (e.g. `bash: git push …`)
+ * - blocked (other): dialog title
+ * - error: first error line + ` (last: tool)` when a tool ran last
+ * - idle: none
  */
 export class PspTmuxState {
 	readonly app: string;
@@ -49,8 +87,13 @@ export class PspTmuxState {
 	/** Status while no run is active. */
 	restingStatus: ProgramStatus = { state: "idle" };
 	/** Open prompts, oldest first; the most recent one is reported. */
-	private prompts: ProgramStatus[] = [];
+	private prompts: { status: ProgramStatus; label: string }[] = [];
 	private lastReport: string | undefined;
+	/** Turns in the current run, for done metadata. */
+	private turns = 0;
+	private runStartedAt: number | undefined;
+	/** Last tool called, for blocked and error messages. */
+	private lastTool: { name: string; line: string } | undefined;
 
 	constructor(
 		app: string,
@@ -63,24 +106,43 @@ export class PspTmuxState {
 	 * Handle one event. Returns the OSC 7501 sequence to write, or undefined
 	 * when the visible status is unchanged (dedupe by full status key).
 	 *
-	 * Outcome events (`message_end`, `compaction_end`) record the run result
-	 * but do not re-report: like the interactive reporter, they only change
-	 * what is shown once a state transition makes the outcome visible.
+	 * Outcome events (`message_end`, compaction failures) record the run
+	 * result but do not re-report: like the interactive reporter, they only
+	 * change what is shown once a state transition makes the outcome visible.
 	 */
 	handle(event: PspTmuxEvent): string | undefined {
 		switch (event.type) {
 			case "agent_start":
 				this.runActive = true;
 				this.runResult = { state: "done" };
+				this.turns = 0;
+				this.runStartedAt = Date.now();
 				return this.report();
+			case "turn_start":
+				this.turns++;
+				return undefined;
+			case "tool_call":
+				this.lastTool = {
+					name: event.toolName,
+					line: toolInputLine(event.input),
+				};
+				return undefined;
 			case "message_end": {
 				// The latest assistant response decides the outcome, so a
 				// retried error is replaced by its successful retry.
 				if (event.message.role !== "assistant") return undefined;
-				this.runResult =
-					event.message.stopReason === "error"
-						? { state: "error", message: firstLine(event.message.errorMessage) }
-						: { state: "done" };
+				if (event.message.stopReason === "error") {
+					const line = firstLine(event.message.errorMessage);
+					this.runResult = {
+						state: "error",
+						message: truncate(
+							this.lastTool ? `${line} (last: ${this.lastTool.name})` : line,
+							150,
+						),
+					};
+				} else {
+					this.runResult = { state: "done" };
+				}
 				return undefined;
 			}
 			case "session_before_compact":
@@ -121,28 +183,64 @@ export class PspTmuxState {
 				}
 				return undefined;
 			}
-			case "agent_settled":
+			case "agent_settled": {
 				this.runActive = false;
-				this.restingStatus = event.aborted ? { state: "idle" } : this.runResult;
+				if (event.aborted) {
+					// An aborted run's turn count is noise: plain idle.
+					this.restingStatus = { state: "idle" };
+				} else {
+					// Bake done metadata in at settle: session · turns · duration.
+					if (
+						this.runResult.state === "done" &&
+						this.runStartedAt !== undefined
+					) {
+						const name = this.getSessionName() ?? "pi";
+						const parts = [
+							name,
+							`${this.turns} turn${this.turns === 1 ? "" : "s"}`,
+							formatDuration(Date.now() - this.runStartedAt),
+						];
+						this.runResult = {
+							state: "done",
+							message: truncate(parts.join(" \u00b7 "), 150),
+						};
+					}
+					this.restingStatus = this.runResult;
+				}
 				return this.report();
-			case "ui_prompt_start":
+			}
+			case "ui_prompt_start": {
+				// Permission prompts show what the tool wants to do:
+				// `bash: git push origin main` beats a generic title.
+				let message = event.title ?? event.kind;
+				if (event.kind === "confirm" && this.lastTool) {
+					const line = this.lastTool.line;
+					message = truncate(
+						line ? `${this.lastTool.name}: ${line}` : this.lastTool.name,
+						150,
+					);
+				}
 				this.prompts = [
 					...this.prompts,
 					{
-						state: "blocked",
-						kind: event.kind === "confirm" ? "permission" : "question",
-						message: event.title ?? event.kind,
+						status: {
+							state: "blocked",
+							kind: event.kind === "confirm" ? "permission" : "question",
+							message,
+						},
+						// The title/kind identifies the prompt on ui_prompt_end,
+						// even when the reported message is the tool line.
+						label: event.title ?? event.kind,
 					},
 				];
 				return this.report();
+			}
 			case "ui_prompt_end": {
 				// Drop the matching open prompt; fall back to the oldest when
 				// labels collide (e.g. two untitled prompts of one kind).
 				const label = event.title ?? event.kind;
 				const i = this.prompts.findIndex(
-					(s) =>
-						s.message === label ||
-						(!event.title && s.message === event.kind),
+					(p) => p.label === label || (!event.title && p.label === event.kind),
 				);
 				this.prompts.splice(i >= 0 ? i : 0, 1);
 				return this.report();
@@ -166,17 +264,22 @@ export class PspTmuxState {
 		this.runResult = { state: "done" };
 		this.restingStatus = { state: "idle" };
 		this.prompts = [];
+		this.turns = 0;
+		this.runStartedAt = undefined;
+		this.lastTool = undefined;
 		return this.report();
 	}
 
 	private currentStatus(): ProgramStatus {
 		const blocked = this.prompts.at(-1);
-		if (blocked) return blocked;
+		if (blocked) return blocked.status;
 		if (this.compacting) return { state: "working", message: "Compacting context" };
 		const status: ProgramStatus = this.runActive
 			? { state: "working" }
 			: this.restingStatus;
-		if (status.state === "working" || status.state === "done") {
+		// The session name fills in only when no message is baked in
+		// (done carries `session · turns · duration`; working the name).
+		if ((status.state === "working" || status.state === "done") && !status.message) {
 			const name = this.getSessionName();
 			return name ? { ...status, message: name } : status;
 		}
