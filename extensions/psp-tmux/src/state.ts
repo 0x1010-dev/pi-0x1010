@@ -1,6 +1,15 @@
 import type { ProgramStatus } from "@earendil-works/pi-tui";
 import { replaceControlCharacters } from "@earendil-works/pi-tui";
 
+/**
+ * tmux DCS passthrough envelope. tmux intercepts `ESC P tmux; … ESC \`,
+ * undoes the ESC doubling in the payload, and writes the bare sequence to the
+ * outer terminal (requires `set -g allow-passthrough on`, tmux >= 3.2).
+ */
+export function tmuxPassthrough(sequence: string): string {
+	return `\x1bPtmux;${sequence.replaceAll("\x1b", "\x1b\x1b")}\x1b\\`;
+}
+
 const APP_PATTERN = /^[A-Za-z0-9_.+-]{1,32}$/;
 
 function b64(text: string): string {
@@ -28,53 +37,14 @@ export function formatReport(status: ProgramStatus): string {
 	return `\x1b]7501;${pairs.join(":")}\x1b\\`;
 }
 
-/**
- * tmux DCS passthrough envelope. tmux intercepts `ESC P tmux; … ESC \`,
- * undoes the ESC doubling in the payload, and writes the bare sequence to the
- * outer terminal (requires `set -g allow-passthrough on`, tmux >= 3.2).
- */
-export function tmuxPassthrough(sequence: string): string {
-	return `\x1bPtmux;${sequence.replaceAll("\x1b", "\x1b\x1b")}\x1b\\`;
-}
-
 function firstLine(text: string | undefined): string {
 	return text?.split(/\r?\n/, 1)[0]?.trim() || "Error";
-}
-
-export function truncate(text: string, max: number): string {
-	return text.length <= max ? text : text.slice(0, max - 1) + "\u2026";
-}
-
-export function formatDuration(ms: number): string {
-	const s = Math.max(0, Math.round(ms / 1000));
-	if (s < 60) return `${s}s`;
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ${s % 60}s`;
-	const h = Math.floor(m / 60);
-	return `${h}h ${m % 60}m`;
-}
-
-/** One short line describing a tool call's target, for blocked messages. */
-function toolInputLine(input: unknown): string {
-	if (typeof input === "string") return truncate(firstLine(input), 80);
-	if (input && typeof input === "object") {
-		const o = input as Record<string, unknown>;
-		const v = o.command ?? o.path ?? o.pattern;
-		if (typeof v === "string") return truncate(firstLine(v), 80);
-	}
-	try {
-		return truncate(JSON.stringify(input) ?? "", 80);
-	} catch {
-		return "";
-	}
 }
 
 /** The extension events the state machine consumes (structural subset). */
 export type PspTmuxEvent =
 	| { type: "agent_start" }
 	| { type: "agent_settled"; aborted: boolean }
-	| { type: "turn_start" }
-	| { type: "tool_call"; toolName: string; input: unknown }
 	| {
 			type: "message_end";
 			message: { role: string; stopReason?: string; errorMessage?: string };
@@ -91,19 +61,14 @@ export type PspTmuxEvent =
 	| { type: "ui_prompt_end"; kind: string; title?: string };
 
 /**
- * Mirrors pi's interactive `ProgramStatusReporter` (dist/modes/interactive/
- * program-status-reporter.js), fed by public extension events instead of
- * interactive-mode internals. Precedence: blocked > compacting > working >
+ * A faithful mirror of pi's interactive `ProgramStatusReporter`
+ * (dist/modes/interactive/program-status-reporter.js), fed by public
+ * extension events instead of interactive-mode internals. This extension is
+ * only the tmux bridge: states and messages are exactly what Pi itself
+ * reports (session name on working/done, dialog title on blocked, first
+ * error line on error). Precedence: blocked > compacting > working >
  * resting. Each report replaces the terminal's record completely, so `app`
  * repeats in every report.
- *
- * Messages (one line, middle-dot separated, capped):
- * - working: session name
- * - done: `session · N turns · duration` (baked in at settle)
- * - blocked (permission): `tool: first input line` (e.g. `bash: git push …`)
- * - blocked (other): dialog title
- * - error: first error line + ` (last: tool)` when a tool ran last
- * - idle: none
  */
 export class PspTmuxState {
 	readonly app: string;
@@ -116,11 +81,6 @@ export class PspTmuxState {
 	/** Open prompts, oldest first; the most recent one is reported. */
 	private prompts: { status: ProgramStatus; label: string }[] = [];
 	private lastReport: string | undefined;
-	/** Turns in the current run, for done metadata. */
-	private turns = 0;
-	private runStartedAt: number | undefined;
-	/** Last tool called, for blocked and error messages. */
-	private lastTool: { name: string; line: string } | undefined;
 
 	constructor(
 		app: string,
@@ -142,35 +102,15 @@ export class PspTmuxState {
 			case "agent_start":
 				this.runActive = true;
 				this.runResult = { state: "done" };
-				this.turns = 0;
-				this.runStartedAt = Date.now();
 				return this.report();
-			case "turn_start":
-				this.turns++;
-				// Keep the working title live: `session · turn N`.
-				return this.runActive ? this.report() : undefined;
-			case "tool_call":
-				this.lastTool = {
-					name: event.toolName,
-					line: toolInputLine(event.input),
-				};
-				return undefined;
 			case "message_end": {
 				// The latest assistant response decides the outcome, so a
 				// retried error is replaced by its successful retry.
 				if (event.message.role !== "assistant") return undefined;
-				if (event.message.stopReason === "error") {
-					const line = firstLine(event.message.errorMessage);
-					this.runResult = {
-						state: "error",
-						message: truncate(
-							this.lastTool ? `${line} (last: ${this.lastTool.name})` : line,
-							150,
-						),
-					};
-				} else {
-					this.runResult = { state: "done" };
-				}
+				this.runResult =
+					event.message.stopReason === "error"
+						? { state: "error", message: firstLine(event.message.errorMessage) }
+						: { state: "done" };
 				return undefined;
 			}
 			case "session_before_compact":
@@ -211,58 +151,24 @@ export class PspTmuxState {
 				}
 				return undefined;
 			}
-			case "agent_settled": {
+			case "agent_settled":
 				this.runActive = false;
-				if (event.aborted) {
-					// An aborted run's turn count is noise: plain idle.
-					this.restingStatus = { state: "idle" };
-				} else {
-					// Bake done metadata in at settle: session · turns · duration.
-					if (
-						this.runResult.state === "done" &&
-						this.runStartedAt !== undefined
-					) {
-						const name = this.getSessionName() ?? "pi";
-						const parts = [
-							name,
-							`${this.turns} turn${this.turns === 1 ? "" : "s"}`,
-							formatDuration(Date.now() - this.runStartedAt),
-						];
-						this.runResult = {
-							state: "done",
-							message: truncate(parts.join(" \u00b7 "), 150),
-						};
-					}
-					this.restingStatus = this.runResult;
-				}
+				this.restingStatus = event.aborted ? { state: "idle" } : this.runResult;
 				return this.report();
-			}
-			case "ui_prompt_start": {
-				// Permission prompts show what the tool wants to do:
-				// `bash: git push origin main` beats a generic title.
-				let message = event.title ?? event.kind;
-				if (event.kind === "confirm" && this.lastTool) {
-					const line = this.lastTool.line;
-					message = truncate(
-						line ? `${this.lastTool.name}: ${line}` : this.lastTool.name,
-						150,
-					);
-				}
+			case "ui_prompt_start":
 				this.prompts = [
 					...this.prompts,
 					{
 						status: {
 							state: "blocked",
 							kind: event.kind === "confirm" ? "permission" : "question",
-							message,
+							message: event.title ?? event.kind,
 						},
-						// The title/kind identifies the prompt on ui_prompt_end,
-						// even when the reported message is the tool line.
+						// The title/kind identifies the prompt on ui_prompt_end.
 						label: event.title ?? event.kind,
 					},
 				];
 				return this.report();
-			}
 			case "ui_prompt_end": {
 				// Drop the matching open prompt; fall back to the oldest when
 				// labels collide (e.g. two untitled prompts of one kind).
@@ -292,9 +198,6 @@ export class PspTmuxState {
 		this.runResult = { state: "done" };
 		this.restingStatus = { state: "idle" };
 		this.prompts = [];
-		this.turns = 0;
-		this.runStartedAt = undefined;
-		this.lastTool = undefined;
 		return this.report();
 	}
 
@@ -305,17 +208,10 @@ export class PspTmuxState {
 		const status: ProgramStatus = this.runActive
 			? { state: "working" }
 			: this.restingStatus;
-		// Without a baked-in message (done carries `session · turns · duration`),
-		// the title is the session name — `pi` when unnamed — and working adds a
-		// live turn counter. No title at all would make Termius fall back to the
-		// hostname.
-		if ((status.state === "working" || status.state === "done") && !status.message) {
-			const name = this.getSessionName() ?? this.app;
-			const message =
-				status.state === "working" && this.turns > 0
-					? `${name} \u00b7 turn ${this.turns}`
-					: name;
-			return { ...status, message };
+		// Pi's reporter puts the session name in working and done reports.
+		if (status.state === "working" || status.state === "done") {
+			const name = this.getSessionName();
+			return name ? { ...status, message: name } : status;
 		}
 		return status;
 	}

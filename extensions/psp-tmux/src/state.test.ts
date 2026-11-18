@@ -1,13 +1,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 
-import {
-	formatDuration,
-	formatReport,
-	PspTmuxState,
-	tmuxPassthrough,
-	truncate,
-} from "../src/state.ts";
+import { formatReport, PspTmuxState, tmuxPassthrough } from "../src/state.ts";
 
 function state(name?: string): PspTmuxState {
 	return new PspTmuxState("pi", () => name);
@@ -20,18 +14,6 @@ function msgOf(oscSeq: string | undefined): string {
 	const m = oscSeq?.match(/msg=([A-Za-z0-9+/=]+)/);
 	return m ? Buffer.from(m[1], "base64").toString("utf8") : "";
 }
-
-test("formatDuration", () => {
-	assert.equal(formatDuration(42_000), "42s");
-	assert.equal(formatDuration(192_000), "3m 12s");
-	assert.equal(formatDuration(3_720_000), "1h 2m");
-	assert.equal(formatDuration(-5), "0s");
-});
-
-test("truncate keeps short text, ellipsizes long text", () => {
-	assert.equal(truncate("abc", 5), "abc");
-	assert.equal(truncate("1234567890", 5), "1234\u2026");
-});
 
 test("formatReport emits title and msg with the same text", () => {
 	const oscSeq = formatReport({
@@ -198,108 +180,27 @@ test("reset clears run and prompts", () => {
 	assert.match(idle!, /state=idle/);
 });
 
-test("done message: session · turns · duration", () => {
+test("blocked shows the dialog title, working/done the session name", () => {
 	const s = state("my-notebook");
-	s.handle({ type: "agent_start" });
-	s.handle({ type: "turn_start" });
-	s.handle({ type: "turn_start" });
-	s.handle({ type: "turn_start" });
-	const done = s.handle({ type: "agent_settled", aborted: false });
-	assert.equal(msgOf(done), "my-notebook \u00b7 3 turns \u00b7 0s");
-});
-
-test("done message without session name falls back to pi; 1 turn singular", () => {
-	const s = state();
-	s.handle({ type: "agent_start" });
-	s.handle({ type: "turn_start" });
-	const done = s.handle({ type: "agent_settled", aborted: false });
-	assert.equal(msgOf(done), "pi \u00b7 1 turn \u00b7 0s");
-});
-
-test("working title: pi when unnamed, live turn counter", () => {
-	const s = state();
-	const working = s.handle({ type: "agent_start" });
-	assert.equal(msgOf(working), "pi");
-	const t1 = s.handle({ type: "turn_start" });
-	assert.equal(msgOf(t1), "pi \u00b7 turn 1");
-	const t2 = s.handle({ type: "turn_start" });
-	assert.equal(msgOf(t2), "pi \u00b7 turn 2");
-});
-
-test("working title uses session name when set", () => {
-	const s = state("my-notebook");
-	s.handle({ type: "agent_start" });
-	const t1 = s.handle({ type: "turn_start" });
-	assert.equal(msgOf(t1), "my-notebook \u00b7 turn 1");
-});
-
-test("aborted run reports plain idle, no metadata", () => {
-	const s = state("my-notebook");
-	s.handle({ type: "agent_start" });
-	s.handle({ type: "turn_start" });
-	const idle = s.handle({ type: "agent_settled", aborted: true });
-	assert.match(idle!, /state=idle/);
-	assert.equal(msgOf(idle), "");
-});
-
-test("permission prompt shows tool and first input line", () => {
-	const s = state();
-	s.handle({
-		type: "tool_call",
-		toolName: "bash",
-		input: { command: "git push --force origin main\u000asecond line" },
-	});
-	const blocked = s.handle({ type: "ui_prompt_start", kind: "confirm", title: "Allow bash?" });
-	assert.match(blocked!, /kind=permission/);
-	assert.equal(msgOf(blocked), "bash: git push --force origin main");
-	// closing matches by the original title, not the tool line
-	const after = s.handle({ type: "ui_prompt_end", kind: "confirm", title: "Allow bash?" });
-	assert.match(after!, /state=idle/);
-});
-
-test("permission prompt truncates long input to 80 chars", () => {
-	const s = state();
-	s.handle({
-		type: "tool_call",
-		toolName: "bash",
-		input: { command: `curl -X POST https://example.com/api?token=${"x".repeat(200)}` },
-	});
-	const blocked = s.handle({ type: "ui_prompt_start", kind: "confirm", title: "Allow bash?" });
-	const msg = msgOf(blocked);
-	assert.ok(msg.length <= 150, `len ${msg.length}`);
-	assert.ok(msg.endsWith("\u2026"), msg);
-});
-
-test("question prompt keeps the dialog title, ignores last tool", () => {
-	const s = state();
-	s.handle({ type: "tool_call", toolName: "bash", input: { command: "ls" } });
 	const blocked = s.handle({
 		type: "ui_prompt_start",
 		kind: "select",
 		title: "Which approach should we use?",
 	});
-	assert.match(blocked!, /kind=question/);
 	assert.equal(msgOf(blocked), "Which approach should we use?");
+	s.handle({ type: "ui_prompt_end", kind: "select", title: "Which approach should we use?" });
+	const working = s.handle({ type: "agent_start" });
+	assert.equal(msgOf(working), "my-notebook");
+	const done = s.handle({ type: "agent_settled", aborted: false });
+	assert.equal(msgOf(done), "my-notebook");
 });
 
-test("error message names the last tool", () => {
-	const s = state();
-	s.handle({ type: "agent_start" });
-	s.handle({ type: "tool_call", toolName: "bash", input: { command: "rg foo" } });
-	s.handle({
-		type: "message_end",
-		message: { role: "assistant", stopReason: "error", errorMessage: "429 rate limit exceeded" },
-	});
-	const err = s.handle({ type: "agent_settled", aborted: false });
-	assert.equal(msgOf(err), "429 rate limit exceeded (last: bash)");
-});
-
-test("error without a prior tool has no suffix", () => {
+test("error reports the first line only", () => {
 	const s = state();
 	s.handle({ type: "agent_start" });
 	s.handle({
 		type: "message_end",
-		message: { role: "assistant", stopReason: "error", errorMessage: "provider down" },
+		message: { role: "assistant", stopReason: "error", errorMessage: "provider down\nstack trace" },
 	});
 	const err = s.handle({ type: "agent_settled", aborted: false });
 	assert.equal(msgOf(err), "provider down");

@@ -47,22 +47,13 @@ behind tmux.
 
 ## Messages
 
-One line, middle-dot separated, capped (tool line 80 chars, full message
-150). The report carries the text in both the `title` and `msg` keys —
-Termius renders `title`, Rex/Ghostty render `msg`; pi-tui's own encoder
-only emits `msg`, so the extension uses a small local encoder for this.
-
-| State | Message |
-|---|---|
-| working | session name (falls back to `pi`), plus a live `· turn N` counter |
-| done | `session · N turns · duration` (e.g. `my-notebook · 3 turns · 3m 12s`; session falls back to `pi`) |
-| blocked, permission | `tool: first input line` (e.g. `bash: git push --force origin main`) |
-| blocked, other | dialog title |
-| error | first error line, plus ` (last: tool)` when a tool ran last |
-| idle | none |
-
-All of it is harvested from existing events (`tool_call`, `turn_start`,
-timestamps) — no model calls.
+The extension is only the tmux bridge: states and messages are exactly
+what Pi's own reporter emits — session name on working/done, dialog title
+on blocked, first error line on error, `Compacting context` during
+compaction, none on idle. Each report carries the text in both the
+`title` and `msg` keys (Termius renders `title`, Rex/Ghostty render
+`msg`); pi-tui's encoder only emits `msg`, so the extension uses a small
+local encoder for this. No model calls, no extra semantics.
 
 ## Requirements
 
