@@ -1,10 +1,10 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { createEditorFactory } from "./src/editor.js";
-import { createFooter } from "./src/footer.js";
+import { createEditorFactory } from "./src/editor.ts";
+import { createFooter } from "./src/footer.ts";
 
 /**
- * pi-visual-stats
+ * pi-context-bar
  *
  * - Bottom border of the prompt box = context progress bar:
  *   ────·────── 60k/128k
@@ -37,13 +37,13 @@ export default function (pi: ExtensionAPI) {
 		apply(ctx);
 	});
 
-	pi.registerCommand("vstat", {
-		description: "Toggle the visual stats bar (off/on)",
+	pi.registerCommand("cbar", {
+		description: "Toggle the context bar (off/on)",
 		handler: async (_args, ctx) => {
 			const on = ctx.ui.getEditorComponent() === undefined;
 			if (on) apply(ctx);
 			else restore(ctx);
-			ctx.ui.notify(`pi-visual-stats ${on ? "on" : "off"}`, "info");
+			ctx.ui.notify(`pi-context-bar ${on ? "on" : "off"}`, "info");
 		},
 	});
 }

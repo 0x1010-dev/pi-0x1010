@@ -25,11 +25,12 @@ function formatCwd(cwd: string, home: string | undefined): string {
  * `theme.fg("dim")` per part (a reset inside one part would clear an outer
  * wrapped dim), context used/total lives in the editor's bottom bar.
  */
-export function createFooter(
-	ctx: ExtensionContext,
-	getEffort: () => string | null,
-) {
-	return (tui: TUI, theme: Theme, footerData: FooterData): { render: (w: number) => string[]; invalidate: () => void; dispose: () => void } => {
+export function createFooter(ctx: ExtensionContext, getEffort: () => string | null) {
+	return (
+		tui: TUI,
+		theme: Theme,
+		footerData: FooterData,
+	): { render: (w: number) => string[]; invalidate: () => void; dispose: () => void } => {
 		const unsubBranch = footerData.onBranchChange(() => tui.requestRender());
 
 		// `truncateToWidth` appends a trailing SGR reset — strip it before
@@ -53,7 +54,7 @@ export function createFooter(
 
 				const model = ctx.model?.id ?? "";
 				const effort = getEffort();
-				let right = model && effort ? `${model} · ${effort}` : effort ?? model;
+				let right = model && effort ? `${model} · ${effort}` : (effort ?? model);
 
 				if (visibleWidth(left) + visibleWidth(right) > width - 2) {
 					// Keep the right label intact; truncate the path first.

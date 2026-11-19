@@ -24,12 +24,9 @@ function b64(text: string): string {
  */
 export function formatReport(status: ProgramStatus): string {
 	const pairs = [`state=${status.state}`];
-	if (status.app !== undefined && APP_PATTERN.test(status.app))
-		pairs.push(`app=${status.app}`);
+	if (status.app !== undefined && APP_PATTERN.test(status.app)) pairs.push(`app=${status.app}`);
 	if (status.state === "blocked" && status.kind) pairs.push(`kind=${status.kind}`);
-	const message = status.message
-		? replaceControlCharacters(status.message).trim()
-		: "";
+	const message = status.message ? replaceControlCharacters(status.message).trim() : "";
 	if (message) {
 		pairs.push(`title=${b64(message)}`);
 		pairs.push(`msg=${b64(message)}`);
@@ -205,9 +202,7 @@ export class PspTmuxState {
 		const blocked = this.prompts.at(-1);
 		if (blocked) return blocked.status;
 		if (this.compacting) return { state: "working", message: "Compacting context" };
-		const status: ProgramStatus = this.runActive
-			? { state: "working" }
-			: this.restingStatus;
+		const status: ProgramStatus = this.runActive ? { state: "working" } : this.restingStatus;
 		// Pi's reporter puts the session name in working and done reports.
 		if (status.state === "working" || status.state === "done") {
 			const name = this.getSessionName();

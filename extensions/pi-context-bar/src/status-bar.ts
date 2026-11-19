@@ -56,11 +56,7 @@ function renderBar(
 	};
 
 	if (markerPos < 0) return run(mid, 0);
-	return (
-		run(markerPos, 0) +
-		border(MARKER) +
-		run(mid - markerPos - 1, markerPos + 1)
-	);
+	return run(markerPos, 0) + border(MARKER) + run(mid - markerPos - 1, markerPos + 1);
 }
 
 /**

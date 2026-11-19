@@ -1,4 +1,4 @@
-# pi-visual-stats
+# pi-context-bar
 
 Pi extension: turns the prompt box's bottom border into a live context progress bar, and cleans up the footer below it.
 
@@ -30,40 +30,41 @@ pi install ./pi-0x1010         # local path
 ```
 
 Enable just this extension in settings (`pi config`), or one-off with
-`pi -e ./pi-0x1010/extensions/pi-visual-stats/index.ts`.
+`pi -e ./pi-0x1010/extensions/pi-context-bar/index.ts`.
 
 No runtime dependencies: pi's own packages (`@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`) are declared as `*` peerDependencies and supplied by the host.
 
 ## Layout
 
+Part of the [pi-0x1010](../../README.md) monorepo — no per-extension
+`package.json`, build step, or dev-link scripts. The root `package.json` is the
+single pi package (manifest, `peerDependencies`, scripts); one root
+`tsconfig.json` covers the tree.
+
 ```
-package.json                   # pi manifest (pi.extensions + pi.image), peerDependencies, scripts
-bunfig.toml                    # autoInstallPeers = false — pi packages come from the host
+index.ts                     # extension entry: session_start wiring + /cbar toggle
 src/
-  index.ts                     # extension entry: session_start wiring + /vstat toggle
-  status-bar.ts                # pure bar renderer (unit tested)
-  editor.ts                    # CustomEditor subclass overriding the bottom border
-  footer.ts                    # custom footer component factory
-test/status-bar.test.ts
-scripts/dev-link.sh            # re-link node_modules/@earendil-works/* for local tsc
-scripts/preview.ts             # deterministic gallery preview (renders the real bar → PNG)
-preview.png                    # committed gallery preview (pi.image)
-.pi/extensions/pi-visual-stats -> .   # dev-only symlink so pi loads it in-tree
+  status-bar.ts              # pure bar renderer (unit tested)
+  editor.ts                  # CustomEditor subclass overriding the bottom border
+  footer.ts                  # custom footer component factory
+test/status-bar.test.ts      # node:test suite, run by the root npm test
+preview.png                  # committed gallery preview (root pi.image)
 ```
 
 ## Dev
 
-```bash
-git clone … && cd pi-visual-stats
-bun install
-bun run dev:link     # symlink local pi packages (re-run after a pi upgrade)
+From the repo root:
 
-bun test             # bar rendering tests
-bun run typecheck    # tsc --noEmit
+```bash
+npm install
+npm run typecheck   # tsc --noEmit over the whole tree
+npm test            # tsx --test, all extensions' node:test suites
 ```
 
-`node_modules/@earendil-works/*` must be symlinks to the installed pi packages: pi aliases these imports at load time, and a physical copy would break its extension module mapping — `bunfig.toml` keeps bun from auto-installing the peers.
+The `@earendil-works/*` packages are peerDependencies supplied by the host at
+runtime — declare, never bundle. Tests must resolve paths from
+`import.meta.dirname`, not the CWD.
 
 ## Disable
 
-`/vstat` toggles the whole extension on/off per session.
+`/cbar` toggles the whole extension on/off per session.

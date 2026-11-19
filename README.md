@@ -53,7 +53,7 @@ pi -e ./pi-0x1010/extensions/pi-notebook/index.ts
 | Name | Status | Description |
 |---|---|---|
 | [`pi-notebook`](extensions/pi-notebook/) | stable | Durable, file-based memory: rules in `AGENTS.md`, per-project handoff, searchable memories. Zero background model calls. |
-| [`pi-visual-stats`](extensions/pi-visual-stats/) | stable | Prompt-box bottom border as a live context progress bar + compact footer. |
+| [`pi-context-bar`](extensions/pi-context-bar/) | stable | Prompt-box bottom border as a live context progress bar + compact footer. |
 | [`psp-tmux`](extensions/psp-tmux/) | implemented | Bridges Pi's Program Status Protocol (OSC 7501) through tmux via DCS passthrough, so terminals like Termius get status + push notifications even when Pi runs inside tmux. Termius acceptance pending on-device verification. |
 
 ## Development
@@ -62,6 +62,7 @@ pi -e ./pi-0x1010/extensions/pi-notebook/index.ts
 npm install
 npm run typecheck   # tsc --noEmit over the whole tree
 npm test            # tsx --test, all extensions' node:test suites
+npm run format      # prettier over the tree (check: npm run format:check)
 ```
 
 ## Notes for contributors
@@ -74,7 +75,9 @@ Conventions (keep every extension evolving the same way):
   Pi supplies the `@earendil-works/*` packages and `typebox` at runtime;
   declare them in `peerDependencies` with `"*"` and never bundle them.
 - **Language**: TypeScript, loaded directly by Pi (no build step).
-  Imports between local files may use explicit `.ts` extensions.
+  Imports between local files use explicit `.ts` extensions.
+- **Style**: Prettier (`.prettierrc`: tabs, print width 100). Run
+  `npm run format` before committing; `format:check` gates the style.
 - **Tests**: node:test API, run by the root `npm test`
   (`tsx --test "extensions/**/*.test.ts"`). Tests must not depend on the
   repo root being the CWD — resolve paths from `import.meta.dirname`.

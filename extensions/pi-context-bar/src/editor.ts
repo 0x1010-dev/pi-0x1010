@@ -6,7 +6,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 
-import { buildBottomBar, type BarState, type BarTheme } from "./status-bar.js";
+import { buildBottomBar, type BarState, type BarTheme } from "./status-bar.ts";
 
 interface BarContext {
 	pi: ExtensionAPI;
@@ -21,9 +21,7 @@ function resolveThresholdFraction(pi: ExtensionAPI, ctx: ExtensionContext): numb
 		const compaction = pi.getSettings().compaction;
 		const key = `${model.provider}/${model.id}`;
 		const reserve =
-			compaction?.modelOverrides?.[key]?.reserveTokens ??
-			compaction?.reserveTokens ??
-			20000;
+			compaction?.modelOverrides?.[key]?.reserveTokens ?? compaction?.reserveTokens ?? 20000;
 		const frac = 1 - reserve / window;
 		return Number.isFinite(frac) ? Math.min(1, Math.max(0, frac)) : null;
 	} catch {

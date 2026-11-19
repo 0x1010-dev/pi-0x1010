@@ -28,21 +28,19 @@ test("formatReport emits title and msg with the same text", () => {
 });
 
 test("formatReport: kind only for blocked, no title/msg without a message", () => {
-	assert.equal(formatReport({ state: "blocked", kind: "permission" }),
-		"\x1b]7501;state=blocked:kind=permission\x1b\\");
+	assert.equal(
+		formatReport({ state: "blocked", kind: "permission" }),
+		"\x1b]7501;state=blocked:kind=permission\x1b\\",
+	);
 	assert.equal(formatReport({ state: "clear" }), "\x1b]7501;state=clear\x1b\\");
-	assert.equal(formatReport({ state: "done", app: "bad app!" }),
-		"\x1b]7501;state=done\x1b\\");
+	assert.equal(formatReport({ state: "done", app: "bad app!" }), "\x1b]7501;state=done\x1b\\");
 });
 
 test("tmuxPassthrough wraps in DCS envelope with doubled ESCs", () => {
 	const inner = "\x1b]7501;state=done:app=pi\x1b\\";
 	const wrapped = tmuxPassthrough(inner);
 	// ESC P tmux; ESC ESC ] 7501 ; ... ESC ESC \ ESC \
-	assert.equal(
-		osc(wrapped),
-		"\\ePtmux;\\e\\e]7501;state=done:app=pi\\e\\e\\\\e\\",
-	);
+	assert.equal(osc(wrapped), "\\ePtmux;\\e\\e]7501;state=done:app=pi\\e\\e\\\\e\\");
 });
 
 test("working -> done with session name, dedupes repeats", () => {
@@ -90,11 +88,12 @@ test("error derived from message_end stopReason; retried success overwrites", ()
 test("non-assistant message_end does not change the outcome", () => {
 	const s = state();
 	s.handle({ type: "agent_start" });
-	s.handle({ type: "message_end", 
+	s.handle({
+		type: "message_end",
 		message: { role: "assistant", stopReason: "error", errorMessage: "x" },
 	});
 	assert.equal(
-		s.handle({ type: "message_end",  message: { role: "toolResult" } }),
+		s.handle({ type: "message_end", message: { role: "toolResult" } }),
 		undefined, // deduped, still error
 	);
 });
@@ -150,32 +149,32 @@ test("compaction_end outside a run: manual success -> done, manual error -> erro
 test("ui_prompt blocks with kind mapping, unblocks back to previous state", () => {
 	const s = state();
 	s.handle({ type: "agent_start" });
-	const confirm = s.handle({ type: "ui_prompt_start",  kind: "confirm", title: "Run rm -rf?" });
+	const confirm = s.handle({ type: "ui_prompt_start", kind: "confirm", title: "Run rm -rf?" });
 	assert.match(confirm!, /state=blocked/);
 	assert.match(confirm!, /kind=permission/);
-	const select = s.handle({ type: "ui_prompt_start",  kind: "select", title: "Pick one" });
+	const select = s.handle({ type: "ui_prompt_start", kind: "select", title: "Pick one" });
 	assert.match(select!, /kind=question/);
 	// closing the top (select) returns to the confirm dialog
-	const back = s.handle({ type: "ui_prompt_end",  kind: "select", title: "Pick one" });
+	const back = s.handle({ type: "ui_prompt_end", kind: "select", title: "Pick one" });
 	assert.match(back!, /kind=permission/);
-	const done = s.handle({ type: "ui_prompt_end",  kind: "confirm", title: "Run rm -rf?" });
+	const done = s.handle({ type: "ui_prompt_end", kind: "confirm", title: "Run rm -rf?" });
 	assert.match(done!, /state=working/);
 });
 
 test("nested prompts of the same kind close in order (fallback to oldest)", () => {
 	const s = state();
-	s.handle({ type: "ui_prompt_start",  kind: "input", title: "A" });
-	s.handle({ type: "ui_prompt_start",  kind: "input", title: "B" });
-	const backToA = s.handle({ type: "ui_prompt_end",  kind: "input", title: "B" });
+	s.handle({ type: "ui_prompt_start", kind: "input", title: "A" });
+	s.handle({ type: "ui_prompt_start", kind: "input", title: "B" });
+	const backToA = s.handle({ type: "ui_prompt_end", kind: "input", title: "B" });
 	assert.match(backToA!, /msg=/);
-	const idle = s.handle({ type: "ui_prompt_end",  kind: "input", title: "A" });
+	const idle = s.handle({ type: "ui_prompt_end", kind: "input", title: "A" });
 	assert.match(idle!, /state=idle/);
 });
 
 test("reset clears run and prompts", () => {
 	const s = state();
 	s.handle({ type: "agent_start" });
-	s.handle({ type: "ui_prompt_start",  kind: "confirm", title: "x" });
+	s.handle({ type: "ui_prompt_start", kind: "confirm", title: "x" });
 	const idle = s.reset();
 	assert.match(idle!, /state=idle/);
 });
@@ -200,9 +199,12 @@ test("error reports the first line only", () => {
 	s.handle({ type: "agent_start" });
 	s.handle({
 		type: "message_end",
-		message: { role: "assistant", stopReason: "error", errorMessage: "provider down\nstack trace" },
+		message: {
+			role: "assistant",
+			stopReason: "error",
+			errorMessage: "provider down\nstack trace",
+		},
 	});
 	const err = s.handle({ type: "agent_settled", aborted: false });
 	assert.equal(msgOf(err), "provider down");
 });
-

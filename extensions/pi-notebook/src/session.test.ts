@@ -11,137 +11,136 @@ process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "nb-session-"));
 const idle = { contextPercent: 0 };
 
 function session(): Session {
-  const s = new Session();
-  s.reset();
-  return s;
+	const s = new Session();
+	s.reset();
+	return s;
 }
 
 test("a commit raises a milestone nudge once, then it is consumed", () => {
-  const s = session();
-  s.recordToolResult("bash", "git commit -m x", false);
-  assert.equal(s.endTurn(idle), true);
-  s.recordToolResult("bash", "git status", false);
-  assert.equal(s.endTurn(idle), false);
+	const s = session();
+	s.recordToolResult("bash", "git commit -m x", false);
+	assert.equal(s.endTurn(idle), true);
+	s.recordToolResult("bash", "git status", false);
+	assert.equal(s.endTurn(idle), false);
 });
 
 test("milestone nudges respect the cooldown", () => {
-  const s = session();
-  s.recordToolResult("bash", "git commit -m x", false);
-  assert.equal(s.endTurn(idle), true);
-  s.recordToolResult("bash", "git commit -m y", false);
-  for (let i = 1; i < s.cfg.nudgeCooldownTurns; i++) {
-    assert.equal(s.endTurn(idle), false);
-  }
-  assert.equal(s.endTurn(idle), true);
+	const s = session();
+	s.recordToolResult("bash", "git commit -m x", false);
+	assert.equal(s.endTurn(idle), true);
+	s.recordToolResult("bash", "git commit -m y", false);
+	for (let i = 1; i < s.cfg.nudgeCooldownTurns; i++) {
+		assert.equal(s.endTurn(idle), false);
+	}
+	assert.equal(s.endTurn(idle), true);
 });
 
 test("failed commits do not count", () => {
-  const s = session();
-  s.recordToolResult("bash", "git commit -m x", true);
-  assert.equal(s.endTurn(idle), false);
+	const s = session();
+	s.recordToolResult("bash", "git commit -m x", true);
+	assert.equal(s.endTurn(idle), false);
 });
 
 test("tool retries do not manufacture a memory-writing obligation", () => {
-  const s = session();
-  s.recordToolResult("bash", "a", true);
-  s.recordToolResult("bash", "a", true);
-  s.recordToolResult("bash", "a", false);
-  assert.equal(s.endTurn(idle), false);
+	const s = session();
+	s.recordToolResult("bash", "a", true);
+	s.recordToolResult("bash", "a", true);
+	s.recordToolResult("bash", "a", false);
+	assert.equal(s.endTurn(idle), false);
 });
 
 test("context at or above the handoff band suppresses the milestone nudge and clears the commit", () => {
-  const s = session();
-  s.recordToolResult("bash", "git commit -m x", false);
-  assert.notEqual(s.cfg.contextBands, false);
-  const high = {
-    contextPercent:
-      s.cfg.contextBands === false ? 0 : s.cfg.contextBands.handoff,
-  };
-  assert.equal(s.endTurn(high), false);
-  // the band already asked for a handoff, so the commit obligation is cleared, not deferred
-  assert.equal(s.endTurn(high), false);
+	const s = session();
+	s.recordToolResult("bash", "git commit -m x", false);
+	assert.notEqual(s.cfg.contextBands, false);
+	const high = {
+		contextPercent: s.cfg.contextBands === false ? 0 : s.cfg.contextBands.handoff,
+	};
+	assert.equal(s.endTurn(high), false);
+	// the band already asked for a handoff, so the commit obligation is cleared, not deferred
+	assert.equal(s.endTurn(high), false);
 });
 
 test("handoffFresh tracks turns since this session last saved the handoff", () => {
-  const s = session();
-  assert.equal(s.handoffFresh(), false);
-  s.markHandoff();
-  assert.equal(s.handoffFresh(), true);
-  for (let i = 0; i < s.cfg.handoffStaleTurns; i++) {
-    s.endTurn(idle);
-  }
-  assert.equal(s.handoffFresh(), true);
-  s.endTurn(idle);
-  assert.equal(s.handoffFresh(), false);
+	const s = session();
+	assert.equal(s.handoffFresh(), false);
+	s.markHandoff();
+	assert.equal(s.handoffFresh(), true);
+	for (let i = 0; i < s.cfg.handoffStaleTurns; i++) {
+		s.endTurn(idle);
+	}
+	assert.equal(s.handoffFresh(), true);
+	s.endTurn(idle);
+	assert.equal(s.handoffFresh(), false);
 });
 
 test("saving a handoff clears pending nudges without invalidating the prompt snapshot", () => {
-  const s = session();
-  s.snapshot = { section: "stable", files: [] };
-  s.snapshotFingerprint = "fingerprint";
-  s.pendingNudge = "save knowledge";
-  s.markHandoff();
-  assert.equal(s.snapshot?.section, "stable");
-  assert.equal(s.snapshotFingerprint, "fingerprint");
-  assert.equal(s.pendingNudge, undefined);
+	const s = session();
+	s.snapshot = { section: "stable", files: [] };
+	s.snapshotFingerprint = "fingerprint";
+	s.pendingNudge = "save knowledge";
+	s.markHandoff();
+	assert.equal(s.snapshot?.section, "stable");
+	assert.equal(s.snapshotFingerprint, "fingerprint");
+	assert.equal(s.pendingNudge, undefined);
 });
 
 test("onCompact shows the handoff once when it was the compaction summary, otherwise hides it", () => {
-  const s = session();
-  s.handoffCompacted = true;
-  s.onCompact();
-  assert.equal(s.handoffShown, true);
-  assert.equal(s.handoffCompacted, false);
+	const s = session();
+	s.handoffCompacted = true;
+	s.onCompact();
+	assert.equal(s.handoffShown, true);
+	assert.equal(s.handoffCompacted, false);
 
-  s.handoffShown = true;
-  s.onCompact();
-  assert.equal(s.handoffShown, false);
+	s.handoffShown = true;
+	s.onCompact();
+	assert.equal(s.handoffShown, false);
 });
 
 test("a scheduled compaction becomes a pending resume once it completes", () => {
-  const s = session();
-  s.onCompact();
-  assert.equal(s.resumePending, false);
-  s.compactPending = true;
-  s.onCompact();
-  assert.equal(s.resumePending, true);
-  assert.equal(s.compactPending, false);
+	const s = session();
+	s.onCompact();
+	assert.equal(s.resumePending, false);
+	s.compactPending = true;
+	s.onCompact();
+	assert.equal(s.resumePending, true);
+	assert.equal(s.compactPending, false);
 });
 
 test("a failed compaction clears the scheduled compaction and summary marker", () => {
-  const s = session();
-  s.compactPending = true;
-  s.handoffCompacted = true;
-  s.onCompactFailed();
-  assert.equal(s.compactPending, false);
-  assert.equal(s.handoffCompacted, false);
+	const s = session();
+	s.compactPending = true;
+	s.handoffCompacted = true;
+	s.onCompactFailed();
+	assert.equal(s.compactPending, false);
+	assert.equal(s.handoffCompacted, false);
 });
 
 test("saving resets nudge counters", () => {
-  const s = session();
-  s.recordToolResult("bash", "git commit -m x", false);
-  s.markSaved();
-  assert.equal(s.endTurn(idle), false);
+	const s = session();
+	s.recordToolResult("bash", "git commit -m x", false);
+	s.markSaved();
+	assert.equal(s.endTurn(idle), false);
 });
 
 test("reset clears per-session state", () => {
-  const s = session();
-  s.handoffShown = true;
-  s.recalled.set("M1", "revision");
-  s.pendingNudge = "x";
-  s.snapshot = { section: "x", files: [] };
-  s.reset();
-  assert.equal(s.handoffShown, false);
-  assert.equal(s.recalled.size, 0);
-  assert.equal(s.pendingNudge, undefined);
-  assert.equal(s.snapshot, undefined);
+	const s = session();
+	s.handoffShown = true;
+	s.recalled.set("M1", "revision");
+	s.pendingNudge = "x";
+	s.snapshot = { section: "x", files: [] };
+	s.reset();
+	assert.equal(s.handoffShown, false);
+	assert.equal(s.recalled.size, 0);
+	assert.equal(s.pendingNudge, undefined);
+	assert.equal(s.snapshot, undefined);
 });
 
 test("compaction resets recalled revisions so dropped memories can return", () => {
-  const s = session();
-  s.recalled.set("M1", "revision");
-  s.handoffShown = true;
-  s.onCompact();
-  assert.equal(s.recalled.size, 0);
-  assert.equal(s.handoffShown, false);
+	const s = session();
+	s.recalled.set("M1", "revision");
+	s.handoffShown = true;
+	s.onCompact();
+	assert.equal(s.recalled.size, 0);
+	assert.equal(s.handoffShown, false);
 });

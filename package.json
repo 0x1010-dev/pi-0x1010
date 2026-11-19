@@ -1,6 +1,6 @@
 {
   "name": "pi-0x1010",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Collection of Pi (pi coding agent) extensions, installable individually from one package.",
   "type": "module",
   "license": "MIT",
@@ -12,11 +12,13 @@
     "extensions": [
       "extensions/*/index.ts"
     ],
-    "image": "./extensions/pi-visual-stats/preview.png"
+    "image": "./extensions/pi-context-bar/preview.png"
   },
   "scripts": {
     "test": "tsx --test \"extensions/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"extensions/**/*.ts\"",
+    "format:check": "prettier --check \"extensions/**/*.ts\""
   },
   "dependencies": {
     "yaml": "^2.8.1"
@@ -30,6 +32,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "prettier": "^3.6.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
   }
