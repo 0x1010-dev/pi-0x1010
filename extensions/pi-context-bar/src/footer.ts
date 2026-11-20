@@ -3,13 +3,15 @@ import type { TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { relative, resolve } from "node:path";
 
+import type { GitStatus } from "./git.ts";
+
 interface FooterData {
 	getGitBranch(): string | null;
 	getExtensionStatuses(): ReadonlyMap<string, string>;
 	onBranchChange(callback: () => void): () => void;
 }
 
-function formatCwd(cwd: string, home: string | undefined): string {
+export function formatCwd(cwd: string, home: string | undefined): string {
 	if (!home) return cwd;
 	const rel = relative(resolve(home), resolve(cwd));
 	if (rel !== "" && !rel.startsWith("..") && !rel.startsWith("/")) {
@@ -18,14 +20,28 @@ function formatCwd(cwd: string, home: string | undefined): string {
 	return rel === "" ? "~" : cwd;
 }
 
+/** `main` -> `main *3 ↑1↓2`: dirty count, ahead/behind (each when non-zero). */
+export function formatBranch(branch: string, git: GitStatus | null): string {
+	if (!git) return branch;
+	let extra = "";
+	if (git.dirty > 0) extra += ` *${git.dirty}`;
+	if (git.ahead > 0) extra += ` ↑${git.ahead}`;
+	if (git.behind > 0) extra += `↓${git.behind}`;
+	return branch + extra;
+}
+
 /**
- * Footer: path (+branch, +extension statuses) left;
+ * Footer: path (+branch *dirty ↑ahead↓behind, +extension statuses) left;
  * `model · effort` right (moved here from the border bar; token/cache/cost
  * stats removed). Like pi's original footer, every part is dimmed via
  * `theme.fg("dim")` per part (a reset inside one part would clear an outer
  * wrapped dim), context used/total lives in the editor's bottom bar.
  */
-export function createFooter(ctx: ExtensionContext, getEffort: () => string | null) {
+export function createFooter(
+	ctx: ExtensionContext,
+	getEffort: () => string | null,
+	getGitStatus: () => GitStatus | null,
+) {
 	return (
 		tui: TUI,
 		theme: Theme,
@@ -46,7 +62,7 @@ export function createFooter(ctx: ExtensionContext, getEffort: () => string | nu
 			render(width: number): string[] {
 				let left = formatCwd(ctx.cwd, process.env.HOME || process.env.USERPROFILE);
 				const branch = footerData.getGitBranch();
-				if (branch) left += ` (${branch})`;
+				if (branch) left += ` (${formatBranch(branch, getGitStatus())})`;
 				const statuses = footerData.getExtensionStatuses();
 				if (statuses.size > 0) {
 					left += "  " + Array.from(statuses.values()).join("  ");

@@ -7,10 +7,14 @@ import {
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 
 import { buildBottomBar, type BarState, type BarTheme } from "./status-bar.ts";
+import type { BarStateStore } from "./state.ts";
 
 interface BarContext {
 	pi: ExtensionAPI;
 	ctx: ExtensionContext;
+	store: BarStateStore;
+	/** Called once with the TUI instance when the editor is constructed. */
+	onTui?: (tui: TUI) => void;
 }
 
 function resolveThresholdFraction(pi: ExtensionAPI, ctx: ExtensionContext): number | null {
@@ -29,12 +33,16 @@ function resolveThresholdFraction(pi: ExtensionAPI, ctx: ExtensionContext): numb
 	}
 }
 
-function readState(pi: ExtensionAPI, ctx: ExtensionContext): BarState {
+function readState(pi: ExtensionAPI, ctx: ExtensionContext, store: BarStateStore): BarState {
 	const usage = ctx.getContextUsage();
 	return {
 		usedTokens: usage?.tokens ?? null,
 		contextWindow: usage?.contextWindow ?? ctx.model?.contextWindow ?? 0,
 		thresholdFraction: resolveThresholdFraction(pi, ctx),
+		baseTokens: store.turnBaseline(),
+		inFlightTokens: store.inFlightTokens(),
+		burnPerTurn: store.burnPerTurn(),
+		compact: store.flashAt(),
 	};
 }
 
@@ -75,14 +83,16 @@ export class ProgressEditor extends CustomEditor {
 	}
 }
 
-export function createEditorFactory({ pi, ctx }: BarContext) {
-	return (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) =>
-		new ProgressEditor(
+export function createEditorFactory({ pi, ctx, store, onTui }: BarContext) {
+	return (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
+		onTui?.(tui);
+		return new ProgressEditor(
 			tui,
 			theme,
 			keybindings,
 			{ paddingX: 0 },
-			() => readState(pi, ctx),
-			() => ctx.ui.theme,
-		);
+				() => readState(pi, ctx, store),
+				() => ctx.ui.theme,
+			);
+	};
 }
