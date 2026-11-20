@@ -59,7 +59,10 @@ export default function (pi: ExtensionAPI) {
 				tui?.requestRender();
 			}),
 			pi.on("message_update", (event) => {
-				if ("delta" in event.assistantMessageEvent && typeof event.assistantMessageEvent.delta === "string") {
+				if (
+					"delta" in event.assistantMessageEvent &&
+					typeof event.assistantMessageEvent.delta === "string"
+				) {
 					store.messageDelta(event.assistantMessageEvent.delta.length);
 				}
 			}),

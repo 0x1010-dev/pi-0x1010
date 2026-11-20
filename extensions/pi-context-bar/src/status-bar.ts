@@ -74,7 +74,8 @@ const URGENCY_COLOR: Record<Urgency, NamedColor> = {
  */
 function buildStats(s: BarState): { text: string; color: NamedColor | "dim" } | null {
 	if (s.compact?.kind === "compacting") return { text: "compacting…", color: "warning" };
-	if (s.compact?.kind === "failed") return { text: `compact failed · ${s.compact.reason}`, color: "error" };
+	if (s.compact?.kind === "failed")
+		return { text: `compact failed · ${s.compact.reason}`, color: "error" };
 	if (s.compact?.kind === "compacted") {
 		const t = s.compact.usedTokens !== null ? formatTokens(s.compact.usedTokens) : "?";
 		return { text: `compacted → ${t}`, color: "success" };
@@ -187,5 +188,8 @@ export function buildBottomBar(
 	if (rightW + 1 > width) return null;
 
 	const mid = width - rightW;
-	return renderBar(theme, border, s, mid, resolveUrgency(s)) + theme.fg(stats.color, ` ${stats.text}`);
+	return (
+		renderBar(theme, border, s, mid, resolveUrgency(s)) +
+		theme.fg(stats.color, ` ${stats.text}`)
+	);
 }

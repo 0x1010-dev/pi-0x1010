@@ -91,8 +91,8 @@ export function createEditorFactory({ pi, ctx, store, onTui }: BarContext) {
 			theme,
 			keybindings,
 			{ paddingX: 0 },
-				() => readState(pi, ctx, store),
-				() => ctx.ui.theme,
-			);
+			() => readState(pi, ctx, store),
+			() => ctx.ui.theme,
+		);
 	};
 }

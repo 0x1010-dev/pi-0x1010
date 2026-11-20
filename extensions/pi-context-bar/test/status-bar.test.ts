@@ -134,15 +134,24 @@ test("urgency: ok = success, warn within 2× burn of threshold, error at/over", 
 
 	const tw = fakeTheme();
 	buildBottomBar(100, tw, borderFn(tw), warn);
-	assert.ok(tw.spans.some((s) => s.color === "warning" && s.attr === ""), "warn fill in warning color");
+	assert.ok(
+		tw.spans.some((s) => s.color === "warning" && s.attr === ""),
+		"warn fill in warning color",
+	);
 
 	const te = fakeTheme();
 	buildBottomBar(100, te, borderFn(te), error);
-	assert.ok(te.spans.some((s) => s.color === "error" && s.attr === ""), "over-threshold fill in error color");
+	assert.ok(
+		te.spans.some((s) => s.color === "error" && s.attr === ""),
+		"over-threshold fill in error color",
+	);
 
 	const to = fakeTheme();
 	buildBottomBar(100, to, borderFn(to), okFar);
-	assert.ok(to.spans.some((s) => s.color === "success" && s.attr === ""), "far-from-threshold fill stays success");
+	assert.ok(
+		to.spans.some((s) => s.color === "success" && s.attr === ""),
+		"far-from-threshold fill stays success",
+	);
 	assert.ok(!to.spans.some((s) => s.color === "warning"), "no warning tint when ok");
 });
 
@@ -152,8 +161,15 @@ test("turn growth head: committed growth + in-flight, fill = pre-turn baseline",
 	const s2: BarState = { ...base, usedTokens: 68000, baseTokens: 60000, inFlightTokens: 4000 };
 	const mid = midFor(120, s2);
 	buildBottomBar(120, t2, borderFn(t2), s2);
-	const head2 = t2.spans.filter((s) => s.attr === "bold" && s.color === "success").map((s) => s.text.length).reduce((a, b) => a + b, 0);
-	assert.equal(head2, Math.max(1, Math.round((mid * 12000) / 128000)), "head = mid × (used−base+inFlight)/window");
+	const head2 = t2.spans
+		.filter((s) => s.attr === "bold" && s.color === "success")
+		.map((s) => s.text.length)
+		.reduce((a, b) => a + b, 0);
+	assert.equal(
+		head2,
+		Math.max(1, Math.round((mid * 12000) / 128000)),
+		"head = mid × (used−base+inFlight)/window",
+	);
 	assert.ok(!t2.spans.some((s) => s.color === "accent"), "no accent");
 
 	// Fill shows the pre-turn baseline (60k), not the total (68k).
@@ -172,42 +188,71 @@ test("turn growth head: committed growth + in-flight, fill = pre-turn baseline",
 	// the head still shows the streaming part.
 	const t4 = fakeTheme();
 	buildBottomBar(120, t4, borderFn(t4), { ...base, inFlightTokens: 20000 });
-	assert.ok(t4.spans.some((s) => s.attr === "bold"), "head = in-flight when baseline unknown");
+	assert.ok(
+		t4.spans.some((s) => s.attr === "bold"),
+		"head = in-flight when baseline unknown",
+	);
 });
 
 test("headroom: always dotted, always border color — no background color change", () => {
 	// Idle: dotted headroom in the border color, marker with it.
 	const idle = fakeTheme();
 	buildBottomBar(100, idle, borderFn(idle), base);
-	assert.ok(idle.spans.some((s) => s.color === "border" && s.text.includes("\u2504")), "idle headroom dotted");
-	assert.ok(idle.spans.some((s) => s.color === "border" && s.text === "\u00B7"), "marker in border color");
+	assert.ok(
+		idle.spans.some((s) => s.color === "border" && s.text.includes("\u2504")),
+		"idle headroom dotted",
+	);
+	assert.ok(
+		idle.spans.some((s) => s.color === "border" && s.text === "\u00B7"),
+		"marker in border color",
+	);
 	assert.ok(!idle.spans.some((s) => s.color === "accent"), "no accent when idle");
 
 	// Mid-turn: headroom and marker unchanged — no color change anywhere.
 	const gen = fakeTheme();
 	buildBottomBar(100, gen, borderFn(gen), { ...base, baseTokens: 0, inFlightTokens: 1000 });
-	assert.ok(gen.spans.some((s) => s.color === "border" && s.text.includes("\u2504")), "headroom still border-colored");
-	assert.ok(!gen.spans.some((s) => s.color === "accent" && s.text.includes("\u2504")), "headroom never accent");
-	assert.ok(gen.spans.some((s) => s.color === "border" && s.text === "\u00B7"), "marker still border color");
+	assert.ok(
+		gen.spans.some((s) => s.color === "border" && s.text.includes("\u2504")),
+		"headroom still border-colored",
+	);
+	assert.ok(
+		!gen.spans.some((s) => s.color === "accent" && s.text.includes("\u2504")),
+		"headroom never accent",
+	);
+	assert.ok(
+		gen.spans.some((s) => s.color === "border" && s.text === "\u00B7"),
+		"marker still border color",
+	);
 });
 
 test("stats: used/total only — no turn counter, no timer", () => {
 	const t = fakeTheme();
-	const line = String(buildBottomBar(100, t, borderFn(t), { ...base, burnPerTurn: 8000 }) as string);
+	const line = String(
+		buildBottomBar(100, t, borderFn(t), { ...base, burnPerTurn: 8000 }) as string,
+	);
 	assert.ok(line.endsWith(` 60k/128k`), `end: ${JSON.stringify(line.slice(-12))}`);
 	assert.equal(visibleWidth(line), 100);
 
 	// Running with a burn sample adds no extra numbers.
 	const t2 = fakeTheme();
 	const line2 = String(
-		buildBottomBar(100, t2, borderFn(t2), { ...base, burnPerTurn: 8000, baseTokens: 0, inFlightTokens: 4000 }) as string,
+		buildBottomBar(100, t2, borderFn(t2), {
+			...base,
+			burnPerTurn: 8000,
+			baseTokens: 0,
+			inFlightTokens: 4000,
+		}) as string,
 	);
 	assert.ok(line2.endsWith(` 60k/128k`), "no turn counter or timer while running");
 
 	// Past threshold: same, just the usage.
 	const t3 = fakeTheme();
 	const line3 = String(
-		buildBottomBar(100, t3, borderFn(t3), { ...base, usedTokens: 118000, burnPerTurn: 8000 }) as string,
+		buildBottomBar(100, t3, borderFn(t3), {
+			...base,
+			usedTokens: 118000,
+			burnPerTurn: 8000,
+		}) as string,
 	);
 	assert.ok(line3.endsWith(` 118k/128k`));
 });
@@ -215,18 +260,27 @@ test("stats: used/total only — no turn counter, no timer", () => {
 test("compaction flashes replace the stats label", () => {
 	const tc = fakeTheme();
 	const lc = String(
-		buildBottomBar(100, tc, borderFn(tc), { ...base, compact: { kind: "compacting" } }) as string,
+		buildBottomBar(100, tc, borderFn(tc), {
+			...base,
+			compact: { kind: "compacting" },
+		}) as string,
 	);
 	assert.ok(lc.endsWith(` compacting…`));
 	assert.ok(tc.spans.some((s) => s.color === "warning" && s.text === " compacting…"));
 
 	const tf = fakeTheme();
 	const lf = String(
-		buildBottomBar(100, tf, borderFn(tf), { ...base, compact: { kind: "failed", reason: "overflow" } }) as string,
+		buildBottomBar(100, tf, borderFn(tf), {
+			...base,
+			compact: { kind: "failed", reason: "overflow" },
+		}) as string,
 	);
 	assert.ok(lf.endsWith(` compact failed · overflow`));
 	assert.ok(tf.spans.some((s) => s.color === "error"));
-	assert.equal(resolveUrgency({ ...base, compact: { kind: "failed", reason: "overflow" } }), "error");
+	assert.equal(
+		resolveUrgency({ ...base, compact: { kind: "failed", reason: "overflow" } }),
+		"error",
+	);
 
 	const tk = fakeTheme();
 	const lk = String(
@@ -270,7 +324,12 @@ test("never overflows; null when too narrow or no window", () => {
 	// Full fill while a turn still streams: the 1-cell head minimum must not
 	// push the row past its width (overflow case — used ≥ window).
 	const tFull = fakeTheme();
-	const full: BarState = { ...base, usedTokens: base.contextWindow, baseTokens: base.contextWindow, inFlightTokens: 5000 };
+	const full: BarState = {
+		...base,
+		usedTokens: base.contextWindow,
+		baseTokens: base.contextWindow,
+		inFlightTokens: 5000,
+	};
 	const lineFull = buildBottomBar(100, tFull, borderFn(tFull), full);
 	assert.ok(lineFull !== null);
 	assert.equal(visibleWidth(String(lineFull)), 100, "full fill + turn growth still fits");

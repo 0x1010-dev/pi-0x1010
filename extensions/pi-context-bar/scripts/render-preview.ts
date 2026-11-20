@@ -76,10 +76,42 @@ const prompt = "type your prompt…";
 const thr = 0.9; // 200k window − 20k reserve
 
 const frames: BarState[] = [
-	{ usedTokens: 60000, contextWindow: 200000, thresholdFraction: thr, baseTokens: null, inFlightTokens: 0, burnPerTurn: null, compact: null },
-	{ usedTokens: 78000, contextWindow: 200000, thresholdFraction: thr, baseTokens: 60000, inFlightTokens: 4000, burnPerTurn: 12000, compact: null },
-	{ usedTokens: 172000, contextWindow: 200000, thresholdFraction: thr, baseTokens: null, inFlightTokens: 0, burnPerTurn: 12000, compact: null },
-	{ usedTokens: 181000, contextWindow: 200000, thresholdFraction: thr, baseTokens: null, inFlightTokens: 0, burnPerTurn: 12000, compact: { kind: "compacting" } },
+	{
+		usedTokens: 60000,
+		contextWindow: 200000,
+		thresholdFraction: thr,
+		baseTokens: null,
+		inFlightTokens: 0,
+		burnPerTurn: null,
+		compact: null,
+	},
+	{
+		usedTokens: 78000,
+		contextWindow: 200000,
+		thresholdFraction: thr,
+		baseTokens: 60000,
+		inFlightTokens: 4000,
+		burnPerTurn: 12000,
+		compact: null,
+	},
+	{
+		usedTokens: 172000,
+		contextWindow: 200000,
+		thresholdFraction: thr,
+		baseTokens: null,
+		inFlightTokens: 0,
+		burnPerTurn: 12000,
+		compact: null,
+	},
+	{
+		usedTokens: 181000,
+		contextWindow: 200000,
+		thresholdFraction: thr,
+		baseTokens: null,
+		inFlightTokens: 0,
+		burnPerTurn: 12000,
+		compact: { kind: "compacting" },
+	},
 ];
 
 console.log(JSON.stringify({ frames: frames.map((s) => frame(s, prompt, left, right)) }));

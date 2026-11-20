@@ -124,7 +124,11 @@ export class BarStateStore {
 	 * (it is null right after compaction, until the next estimate lands).
 	 */
 	noteUsage(usedTokens: number | null): void {
-		if (this.flash?.kind === "compacted" && this.flash.usedTokens === null && usedTokens !== null) {
+		if (
+			this.flash?.kind === "compacted" &&
+			this.flash.usedTokens === null &&
+			usedTokens !== null
+		) {
 			this.flash = { kind: "compacted", usedTokens };
 		}
 	}

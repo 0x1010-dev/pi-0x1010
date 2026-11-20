@@ -72,7 +72,11 @@ test("flashes: compacting never expires; compacted/failed expire after the TTL",
 
 	s.compacting();
 	assert.equal(s.flashAt(now)?.kind, "compacting");
-	assert.equal(s.flashAt(now + LATER)?.kind, "compacting", "compacting persists until it resolves");
+	assert.equal(
+		s.flashAt(now + LATER)?.kind,
+		"compacting",
+		"compacting persists until it resolves",
+	);
 
 	s.compacted(50_000);
 	assert.equal(s.flashAt(now + 1000)?.kind, "compacted");
