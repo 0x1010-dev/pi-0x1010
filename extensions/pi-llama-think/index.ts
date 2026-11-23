@@ -8,26 +8,25 @@ import { buildLevelMap, parseEfforts } from "./parse.ts";
 /**
  * pi-llama-think
  *
- * Overrides the built-in `llama.cpp` provider so the `/thinking` selector shows the
- * REAL reasoning-effort levels a model's chat template supports — discovered live from
- * the server and parsed out of the template's `raise_exception` guard — instead of the
- * hardcoded `off + medium` the built-in sends.
+ * Registers a SEPARATE `llama-think` provider (it does NOT override the built-in
+ * `llama.cpp` — pi loads built-in extensions after user extensions and the `llama.cpp`
+ * built-in is not replaceable, so an extension can never win that id). Models from the
+ * same llama.cpp router appear under `llama-think/<id>` alongside the built-in's
+ * `llama.cpp/<id>`; select the `llama-think` ones for real thinking levels.
  *
- * The built-in only ever sends a boolean (`enable_thinking`) via
- * `thinkingFormat: "qwen-chat-template"`. This extension switches to
- * `thinkingFormat: "chat-template"` and emits a per-level `reasoning_effort` in
- * `chat_template_kwargs`, so selecting e.g. `xhigh` actually reaches the model.
+ * For each loaded model it parses the chat template's `raise_exception` guard and sets
+ * `thinkingLevelMap` to the accepted efforts, using `thinkingFormat: "chat-template"` to
+ * emit a per-level `reasoning_effort` in `chat_template_kwargs` (the built-in only sends a
+ * boolean `enable_thinking`, i.e. off+medium). `reasoning_effort` uses `omitWhenOff` so
+ * `off` never sends a value the template rejects.
  *
- * Chat models, auth (`/login`), and streaming mirror the built-in. One deliberate
- * tradeoff: the built-in's llama.cpp *classifier* models are NOT re-provided, because
- * their APIs (`llama-cpp-classify` / `typesafe-system-one`) are only importable via the
- * wildcard subpath `@earendil-works/pi-ai/api/*.lazy`, which does not resolve for a
- * git/npm-installed extension (only pi's own bundled code can import it). Consequence:
- * codemode `models.classify()` can no longer select a llama.cpp model. See
- * docs/pi-llama-think-implementation.md.
+ * Auth: run `/login llama-think` once (enter the server URL) — this provider cannot read
+ * the built-in `llama.cpp` credential. Classifier models are intentionally not provided
+ * (their APIs live only under a wildcard subpath that doesn't resolve for installed
+ * extensions). See docs/pi-llama-think-implementation.md.
  */
 
-const LLAMA_PROVIDER_ID = "llama.cpp";
+const LLAMA_PROVIDER_ID = "llama-think";
 const DEFAULT_LLAMA_SERVER_URL = "http://127.0.0.1:9931";
 
 // ---------------------------------------------------------------------------
@@ -274,15 +273,15 @@ function createLlamaThinkProvider(): Provider {
 
 	const provider: Provider = {
 		id: LLAMA_PROVIDER_ID,
-		name: "llama.cpp",
+		name: "llama-think",
 		baseUrl: llamaInferenceUrl(DEFAULT_LLAMA_SERVER_URL),
 		auth: {
 			apiKey: {
-				name: "llama.cpp server",
+				name: "llama-think server",
 				login: async (interaction) => {
 					const enteredUrl = await interaction.prompt({
 						type: "text",
-						message: "llama.cpp server URL",
+						message: "llama-think server URL",
 						placeholder: process.env.LLAMA_BASE_URL ?? DEFAULT_LLAMA_SERVER_URL,
 					});
 					const serverUrl = normalizeLlamaServerUrl(

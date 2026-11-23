@@ -1,6 +1,6 @@
 {
   "name": "pi-0x1010",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Collection of Pi (pi coding agent) extensions, installable individually from one package.",
   "type": "module",
   "license": "MIT",
