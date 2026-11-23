@@ -1,17 +1,27 @@
 # pi-llama-think — implementation document
 
-Status: **implemented.** `extensions/pi-llama-think/` (see below). Written 2026-07 from a
-live investigation of pi 1.6.0 source and the iceland llama-server; implemented and
-validated against the live server the same month.
+Status: **implemented — as a separate `llama-think` provider (v0.6.0), not an override.**
+Written 2026-07 from a live investigation of pi 1.6.0 source and the iceland
+llama-server; implemented and validated against the live server.
+
+> **The original design (override the `llama.cpp` provider) is architecturally
+> impossible.** pi's `resource-loader.loadExtensionPaths` loads *user* extensions first
+> and *built-in* extensions second; both call `registerNativeProvider`, so last write
+> wins and the built-in always overwrites an extension's registration of the same id.
+> Only built-ins flagged `replaceable` (codemode, tool-search, mcp) can be dropped via
+> the tool/command/flag name-collision mechanism — `llama.cpp` is not. Verified live:
+> `getRegisteredNativeProvider('llama.cpp')` returned the built-in and the extension's
+> `refreshModels` never ran. The shipped design therefore registers a distinct
+> `llama-think` provider (live discovery + real thinking levels); models appear as
+> `llama-think/<id>` alongside the built-in's `llama.cpp/<id>`, and auth is a separate
+> `/login llama-think` (an extension's `AuthContext` only exposes `env()`/`fileExists()`,
+> so it cannot read the `llama.cpp` credential).
 
 ## Implementation notes (delta from the original design)
 
-- **Full provider, not legacy config.** The built-in `llama.cpp` provider is a complete
-  pi-ai `Provider` object (native `auth`, `classify`, `stream`). Registering the legacy
-  config form (`{ baseUrl, apiKey, api, refreshModels }`) would drop `auth` + `classify`,
-  breaking `/login llama.cpp` and the `/llama` command. So the extension mirrors the full
-  provider and changes only the chat-model mapping. Auth (`/login`) and the `/llama`
-  command are intact.
+- **Separate `llama-think` provider id** (see above). The full pi-ai `Provider` object
+  (auth, `refreshModels`, `stream`) is otherwise a faithful port of the built-in with the
+  thinking wiring enhanced.
 - **Classifier models are intentionally NOT re-provided (accepted regression).** The
   built-in's llama.cpp classifier models (`llama-cpp-classify` / `typesafe-system-one`)
   cannot be replicated from an installed extension: their APIs are only importable via the
