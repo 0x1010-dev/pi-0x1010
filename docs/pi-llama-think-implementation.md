@@ -9,9 +9,20 @@ validated against the live server the same month.
 - **Full provider, not legacy config.** The built-in `llama.cpp` provider is a complete
   pi-ai `Provider` object (native `auth`, `classify`, `stream`). Registering the legacy
   config form (`{ baseUrl, apiKey, api, refreshModels }`) would drop `auth` + `classify`,
-  breaking `/login llama.cpp`, the `/llama` command, and codemode classifiers. So the
-  extension mirrors the full provider verbatim and changes only `toPiModel`. This resolves
-  open questions 1, 2, and 3 (no `/llama` break, no classifier regression, auth intact).
+  breaking `/login llama.cpp` and the `/llama` command. So the extension mirrors the full
+  provider and changes only the chat-model mapping. Auth (`/login`) and the `/llama`
+  command are intact.
+- **Classifier models are intentionally NOT re-provided (accepted regression).** The
+  built-in's llama.cpp classifier models (`llama-cpp-classify` / `typesafe-system-one`)
+  cannot be replicated from an installed extension: their APIs are only importable via the
+  wildcard subpath `@earendil-works/pi-ai/api/*.lazy`, which **does not resolve** for a
+  git/npm-installed extension (only pi's own bundled code can import it). Verified: root
+  `@earendil-works/pi-ai` and the explicit `./compat` export resolve; the `./api/*`
+  wildcard does not (static *and* dynamic import), and `import.meta.resolve` is unavailable
+  in the extension loader. Consequence: codemode `models.classify()` can no longer select a
+  llama.cpp model. Chat, thinking levels, streaming, and auth are unaffected. (The
+  `import type`-only pi-context-bar extension never hit this — type imports are erased at
+  runtime, so it needs no `@earendil-works/*` runtime resolution.)
 - **`omitWhenOff: true` on the `reasoning_effort` kwarg.** The original sketch sent
   `reasoning_effort: { $var: "thinking.effort" }` unconditionally. But when the level is
   `off`, pi sets `reasoningEffort = undefined`, so the kwarg resolves to

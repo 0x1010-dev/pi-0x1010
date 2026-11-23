@@ -1,9 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { Api, AnyModel, Model, Provider, RefreshModelsContext } from "@earendil-works/pi-ai";
+import type { Api, Model, Provider, RefreshModelsContext } from "@earendil-works/pi-ai";
 import { isModelType } from "@earendil-works/pi-ai";
 import { stream, streamSimple } from "@earendil-works/pi-ai/compat";
-import { llamaCppClassifyApi } from "@earendil-works/pi-ai/api/llama-cpp-classify.lazy";
-import { typesafeSystemOneApi } from "@earendil-works/pi-ai/api/typesafe-system-one.lazy";
 
 import { buildLevelMap, parseEfforts } from "./parse.ts";
 
@@ -20,8 +18,13 @@ import { buildLevelMap, parseEfforts } from "./parse.ts";
  * `thinkingFormat: "chat-template"` and emits a per-level `reasoning_effort` in
  * `chat_template_kwargs`, so selecting e.g. `xhigh` actually reaches the model.
  *
- * Everything else about the provider (auth / `/login`, classifier models, streaming)
- * mirrors the built-in verbatim so nothing regresses. See docs/pi-llama-think-implementation.md.
+ * Chat models, auth (`/login`), and streaming mirror the built-in. One deliberate
+ * tradeoff: the built-in's llama.cpp *classifier* models are NOT re-provided, because
+ * their APIs (`llama-cpp-classify` / `typesafe-system-one`) are only importable via the
+ * wildcard subpath `@earendil-works/pi-ai/api/*.lazy`, which does not resolve for a
+ * git/npm-installed extension (only pi's own bundled code can import it). Consequence:
+ * codemode `models.classify()` can no longer select a llama.cpp model. See
+ * docs/pi-llama-think-implementation.md.
  */
 
 const LLAMA_PROVIDER_ID = "llama.cpp";
@@ -132,7 +135,7 @@ class LlamaClient {
 }
 
 // ---------------------------------------------------------------------------
-// Model mapping (mirrors built-in toPiModel/toPiClassifierModel, enhanced)
+// Model mapping (mirrors built-in toPiModel, enhanced for thinking levels)
 // ---------------------------------------------------------------------------
 
 function modelIsSelectable(model: LlamaCatalogModel, routerAutoload: boolean): boolean {
@@ -161,15 +164,10 @@ async function routerAutoloadEnabled(
 	}
 }
 
-function isDecisionModel(model: LlamaCatalogModel): boolean {
-	return model.architecture?.output_modalities?.includes("decisions") === true;
-}
-
 /** Decision-only models cannot generate text and are not listed for chat. */
 function isChatModel(model: LlamaCatalogModel): boolean {
-	return (
-		!isDecisionModel(model) || model.architecture?.output_modalities?.includes("text") === true
-	);
+	const output = model.architecture?.output_modalities;
+	return output?.includes("decisions") !== true || output?.includes("text") === true;
 }
 
 function configuredContextWindow(model: LlamaCatalogModel): number | undefined {
@@ -193,38 +191,6 @@ function contextWindowOf(model: LlamaCatalogModel, cached?: number): number {
 	return train && train > 0 ? train : 128000;
 }
 
-function toPiClassifierModel(
-	model: LlamaCatalogModel,
-	serverUrl: string,
-	cachedContextWindow?: number,
-) {
-	const decision = isDecisionModel(model);
-	const image = decision && model.architecture?.input_modalities?.includes("image") === true;
-	return {
-		type: "classifier" as const,
-		id: model.id,
-		name: model.id,
-		api: decision ? "typesafe-system-one" : "llama-cpp-classify",
-		provider: LLAMA_PROVIDER_ID,
-		baseUrl: decision ? llamaInferenceUrl(serverUrl) : serverUrl,
-		input: image
-			? (["text", "image"] as ("text" | "image")[])
-			: (["text"] as ("text" | "image")[]),
-		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-		contextWindow: contextWindowOf(model, cachedContextWindow),
-		...(image && {
-			compat: { imageInput: "images" as const, sendImageOptInHeader: false },
-		}),
-	};
-}
-
-function isLlamaClassifierModel(model: AnyModel): boolean {
-	return (
-		isModelType(model, "classifier") &&
-		(model.api === "llama-cpp-classify" || model.api === "typesafe-system-one")
-	);
-}
-
 /**
  * Build the chat-model entry. Identical to the built-in except the thinking wiring:
  *  - `thinkingLevelMap` is derived from the template's accepted efforts (not hardcoded), and
@@ -236,7 +202,7 @@ function toPiModel(
 	serverUrl: string,
 	props: LlamaProps | undefined,
 	cachedContextWindow?: number,
-) {
+): Model<Api> {
 	const contextWindow = contextWindowOf(model, cachedContextWindow);
 	const template = props?.chat_template;
 	const hasThinking = template?.includes("enable_thinking") === true;
@@ -246,7 +212,7 @@ function toPiModel(
 	return {
 		id: model.id,
 		name: model.id,
-		api: "openai-completions" as const,
+		api: "openai-completions",
 		provider: LLAMA_PROVIDER_ID,
 		baseUrl: llamaInferenceUrl(serverUrl),
 		reasoning: hasThinking,
@@ -262,26 +228,25 @@ function toPiModel(
 			supportsReasoningEffort: false,
 			supportsUsageInStreaming: true,
 			supportsStrictMode: false,
-			maxTokensField: "max_tokens" as const,
+			maxTokensField: "max_tokens",
 			...(hasThinking &&
 				supportsEffort && {
-					thinkingFormat: "chat-template" as const,
+					thinkingFormat: "chat-template",
 					chatTemplateKwargs: {
-						enable_thinking: { $var: "thinking.enabled" as const },
-						reasoning_effort: { $var: "thinking.effort" as const, omitWhenOff: true },
+						enable_thinking: { $var: "thinking.enabled" },
+						reasoning_effort: { $var: "thinking.effort", omitWhenOff: true },
 						preserve_thinking: true,
 					},
 				}),
 			// Thinking template with no parseable effort guard: fall back to the built-in
 			// boolean behavior so the model at least gets thinking on/off.
-			...(hasThinking &&
-				!supportsEffort && { thinkingFormat: "qwen-chat-template" as const }),
+			...(hasThinking && !supportsEffort && { thinkingFormat: "qwen-chat-template" }),
 		},
 	};
 }
 
 // ---------------------------------------------------------------------------
-// Provider factory (mirrors built-in createLlamaProvider)
+// Provider factory (mirrors built-in createLlamaProvider, chat models only)
 // ---------------------------------------------------------------------------
 
 type AuthCtx = { env: (name: string) => Promise<string | undefined> };
@@ -306,9 +271,6 @@ async function resolveServerUrl(
 
 function createLlamaThinkProvider(): Provider {
 	let models: Model<Api>[] = [];
-	let classifiers: AnyModel[] = [];
-	const fallbackClassifier = llamaCppClassifyApi();
-	const decisionClassifier = typesafeSystemOneApi();
 
 	const provider: Provider = {
 		id: LLAMA_PROVIDER_ID,
@@ -333,7 +295,7 @@ function createLlamaThinkProvider(): Provider {
 						signal: interaction.signal,
 					});
 					return {
-						type: "api_key" as const,
+						type: "api_key",
 						key: apiKey || undefined,
 						env: { LLAMA_BASE_URL: serverUrl },
 					};
@@ -342,7 +304,7 @@ function createLlamaThinkProvider(): Provider {
 					const serverUrl = await resolveServerUrl(ctx, credential);
 					return serverUrl
 						? {
-								type: "api_key" as const,
+								type: "api_key",
 								source: credential ? "stored credential" : "LLAMA_BASE_URL",
 							}
 						: undefined;
@@ -360,20 +322,16 @@ function createLlamaThinkProvider(): Provider {
 			},
 		},
 		getModels: () => models,
-		getAllModels: () => [...models, ...classifiers],
 		refreshModels: async (context: RefreshModelsContext) => {
 			const cachedContextWindows = new Map<string, number>();
 			if (context.stored) {
-				const stored = (context.stored.models ?? []).filter(
-					(m) => (m as { provider?: string }).provider === LLAMA_PROVIDER_ID,
-				);
-				const restored = stored.filter(
+				const restored = (context.stored.models ?? []).filter(
 					(m) =>
+						(m as { provider?: string }).provider === LLAMA_PROVIDER_ID &&
 						isModelType(m, "chat") &&
 						(m as { api?: string }).api === "openai-completions",
 				);
-				const restoredClassifiers = stored.filter(isLlamaClassifierModel);
-				for (const m of [...restored, ...restoredClassifiers]) {
+				for (const m of restored) {
 					cachedContextWindows.set(
 						(m as { id: string }).id,
 						(m as { contextWindow: number }).contextWindow,
@@ -383,7 +341,6 @@ function createLlamaThinkProvider(): Provider {
 					!(await context.publish({
 						update: () => {
 							models = restored as Model<Api>[];
-							classifiers = restoredClassifiers;
 						},
 					}))
 				) {
@@ -408,13 +365,15 @@ function createLlamaThinkProvider(): Provider {
 			const routerAutoload = await routerAutoloadEnabled(client, catalog, context.signal);
 			if (context.signal.aborted) return;
 
-			const selectable = catalog.filter((m) => modelIsSelectable(m, routerAutoload));
+			const selectable = catalog.filter(
+				(m) => modelIsSelectable(m, routerAutoload) && isChatModel(m),
+			);
 
 			// Only loaded models expose their chat template without side effects. Unloaded
 			// autoload presets would need loading; querying sleeping models may wake them.
 			// Those stay without thinking support until loaded + a later refresh.
 			const refreshed = await Promise.all(
-				selectable.filter(isChatModel).map(async (m) => {
+				selectable.map(async (m) => {
 					const cached = cachedContextWindows.get(m.id);
 					if (m.status.value !== "loaded")
 						return toPiModel(m, serverUrl, undefined, cached);
@@ -422,28 +381,20 @@ function createLlamaThinkProvider(): Provider {
 					return toPiModel(m, serverUrl, props, cached);
 				}),
 			);
-			const refreshedClassifiers = selectable.map((m) =>
-				toPiClassifierModel(m, serverUrl, cachedContextWindows.get(m.id)),
-			);
 			if (context.signal.aborted) return;
 
 			await context.publish({
-				persist: { models: [...refreshed, ...refreshedClassifiers], checkedAt: Date.now() },
+				persist: { models: refreshed, checkedAt: Date.now() },
 				update: () => {
 					models = refreshed;
-					classifiers = refreshedClassifiers;
 				},
 			});
 		},
 		// pi-ai's compat `stream` is typed against `ProviderStreamOptions`; the `Provider`
 		// interface declares `ApiStreamOptions<T>`. The built-in passes it through untyped;
-		// we cast at the boundary. `streamSimple`/`classify` conform as-is.
+		// we cast at the boundary. `streamSimple` conforms as-is.
 		stream: stream as Provider["stream"],
 		streamSimple,
-		classify: (model, context, options) =>
-			model.api === "typesafe-system-one"
-				? decisionClassifier.classify(model, context, options)
-				: fallbackClassifier.classify(model, context, options),
 	};
 
 	return provider;
